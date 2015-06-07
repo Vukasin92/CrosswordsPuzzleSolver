@@ -3,7 +3,7 @@ package etf.crossword.sv110059d;
 import java.util.Collections;
 
 import javax.swing.DefaultListModel;
-import javax.swing.JOptionPane;
+import javax.swing.JButton;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingWorker;
 import javax.swing.event.ListSelectionEvent;
@@ -12,9 +12,11 @@ import javax.swing.event.ListSelectionListener;
 class SolverWorker extends SwingWorker<Integer, Integer>
 {
 	private Game game;
+	private JButton btnAbort;
 
-	public SolverWorker(Game game) {
+	public SolverWorker(Game game, JButton btnAbort) {
 		this.game = game;
+		this.btnAbort = btnAbort;
 	}
 	
     protected Integer doInBackground() throws Exception
@@ -37,6 +39,7 @@ class SolverWorker extends SwingWorker<Integer, Integer>
         finally
         {
         	game.isCancelled = true;
+        	btnAbort.setEnabled(false);
         	if (game.measure) {
         		long endTime = System.nanoTime();
 				game.textArea.append("Execution time : "+((endTime-game.startTime)*1.0/1000/1000)+" ms.\n");

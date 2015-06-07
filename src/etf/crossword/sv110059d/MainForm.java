@@ -276,7 +276,7 @@ public class MainForm {
 				int result = game.nextIteration();
 				if (result == 0) {
 					game.measure = false;
-					solver = new SolverWorker(game);
+					solver = new SolverWorker(game, btnAbort);
 					solver.execute();
 				}
 				else if (result == 2) {
@@ -303,7 +303,7 @@ public class MainForm {
 				boolean found = game.solve();
 				if (found) {
 					game.measure = true;
-					solver = new SolverWorker(game);
+					solver = new SolverWorker(game, btnAbort);
 					solver.execute();
 					btnAbort.setEnabled(true);
 				}
