@@ -3,7 +3,7 @@ package etf.crossword.sv110059d;
 import java.util.ArrayList;
 
 public class WordDictionary {
-	private static final int MAX_LENGTH = 6;
+	private static final int MAX_LENGTH = 5;
 	
 	@SuppressWarnings("unchecked")
 	ArrayList<String>[] words = (ArrayList<String>[])new ArrayList[MAX_LENGTH];

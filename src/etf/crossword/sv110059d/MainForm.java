@@ -17,11 +17,13 @@ import java.io.IOException;
 
 import javax.swing.Box;
 import javax.swing.ButtonGroup;
+import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -42,14 +44,18 @@ public class MainForm {
 	private JButton btnNext;
 	private JButton btnSolve;
 	private JButton[][] crossWordFields;
-	private int numRows = 6;
+	private int numRows = 5;
 	private int numCols = 5;
-	private int newNumRows = 6;
+	private int newNumRows = 5;
 	private int newNumCols = 5;
 	private JPanel panel_1;
 	private JPanel panel;
 	private File dictionaryFile = null;
 	private WordDictionary dictionary = null;
+	private JPanel panel_2;
+	private JList<String> list;
+	private JPanel panel_3;
+	protected SolverWorker solver;
 
 	/**
 	 * Launch the application.
@@ -71,8 +77,12 @@ public class MainForm {
 	 * Create the application.
 	 */
 	public MainForm() {
-		game = new Game(textArea);
 		initialize();
+		game = new Game(textArea);
+		
+		panel_3 = new JPanel();
+		panel_3.setPreferredSize(new Dimension(150, 10));
+		frame.getContentPane().add(panel_3, BorderLayout.EAST);
 	}
 
 	/**
@@ -95,6 +105,30 @@ public class MainForm {
 		gbl_panel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
 		panel.setLayout(gbl_panel);
 		
+		panel_2 = new JPanel();
+		panel_2.setBorder(new EmptyBorder(5, 5, 5, 5));
+		panel_2.setPreferredSize(new Dimension(150, 10));
+		frame.getContentPane().add(panel_2, BorderLayout.WEST);
+		
+		JScrollPane listScrollPane = new JScrollPane();
+		list = new JList<String>();
+		list.setBorder(new EmptyBorder(5, 5, 5, 5));
+		listScrollPane.setViewportView(list);
+		JLabel lblSolutions = new JLabel("Solutions:");
+		lblSolutions.setBorder(new EmptyBorder(5, 5, 5, 5));
+		panel_2.add(lblSolutions);
+		panel_2.add(listScrollPane);
+		
+		final JButton btnAbort = new JButton("Abort");
+		btnAbort.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				btnAbort.setEnabled(false);
+				solver.cancel(true);
+			}
+		});
+		panel_2.add(btnAbort);
+		btnAbort.setEnabled(false);
+		
 		JButton btnNewGame = new JButton("New game");
 		btnNewGame.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
@@ -109,10 +143,14 @@ public class MainForm {
 				}
 				numRows = newNumRows;
 				numCols = newNumCols;
+				btnAbort.setEnabled(false);
 				btnLoadWords.setEnabled(true);
 				btnNext.setEnabled(false);
 				btnSolve.setEnabled(false);
 				drawCrosswordGrid(false);
+				textArea.setText("");
+				DefaultListModel<String> model = new DefaultListModel<String>();
+				list.setModel(model);
 				panel_1.revalidate();
 				panel_1.repaint();
 			}
@@ -234,8 +272,16 @@ public class MainForm {
 		
 		btnNext = new JButton("Next");
 		btnNext.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				game.next();
+			public void actionPerformed(ActionEvent e) {				
+				int result = game.nextIteration();
+				if (result == 0) {
+					game.measure = false;
+					solver = new SolverWorker(game);
+					solver.execute();
+				}
+				else if (result == 2) {
+					btnNext.setEnabled(false);
+				}
 			}
 		});
 		btnNext.setEnabled(false);
@@ -248,9 +294,23 @@ public class MainForm {
 		
 		btnSolve = new JButton("Solve");
 		btnSolve.addActionListener(new ActionListener() {
+			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				game.solve();
-				game.checkSolution();
+				// TODO Auto-generated method stub
+				btnNext.setEnabled(false);
+				btnSolve.setEnabled(false);
+				game.startTime = System.nanoTime();
+				boolean found = game.solve();
+				if (found) {
+					game.measure = true;
+					solver = new SolverWorker(game);
+					solver.execute();
+					btnAbort.setEnabled(true);
+				}
+				else {
+					long endTime = System.nanoTime();
+					textArea.append("Execution time : "+((endTime-game.startTime)*1.0/1000/1000)+" ms.\n");
+				}
 			}
 		});
 		btnSolve.setEnabled(false);
@@ -262,7 +322,6 @@ public class MainForm {
 		panel.add(btnSolve, gbc_btnNewButton_1);
 		
 		panel_1 = new JPanel();
-		panel_1.setBorder(null);
 		frame.getContentPane().add(panel_1, BorderLayout.CENTER);
 		panel_1.setLayout(new GridBagLayout());
 		
@@ -324,7 +383,7 @@ public class MainForm {
 				crossWordFields[j][i].setEnabled(false);
 			}
 		}
-		game.Initialize(numRows, numCols, dictionary, crossWordFields);
+		game.Initialize(numRows, numCols, dictionary, crossWordFields, list);
 		//game.checkWords();
 	}
 

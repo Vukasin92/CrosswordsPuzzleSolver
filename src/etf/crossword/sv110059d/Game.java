@@ -9,20 +9,29 @@ import java.util.Map.Entry;
 import java.util.Queue;
 
 import javax.swing.JButton;
+import javax.swing.JList;
 import javax.swing.JTextArea;
 
 import etf.crossword.sv110059d.WordVariable.Direction;
 
 public class Game {
 	
-	private HashMap<Integer, WordVariable> nodes;
-	private ArrayList<WordVariable> words;
-	private int numRows;
-	private int numCols;
-	private WordDictionary dictionary;
-	private JTextArea textArea;
-	private JButton[][] crossWordFields;
-	private Queue<Tuple> set;
+	HashMap<Integer, WordVariable> nodes;
+	ArrayList<WordVariable> words;
+	ArrayList<WordVariable> wordsSolutions;
+	
+	Solution currentSolution;
+	int numRows;
+	int numCols;
+	WordDictionary dictionary;
+	JTextArea textArea;
+	JButton[][] crossWordFields;
+	Queue<Tuple> set;
+	int iteration;
+	JList<String> solutionList;
+	boolean isCancelled;
+	long startTime;
+	boolean measure;
 	
 	Game(JTextArea textArea)
 	{		
@@ -31,7 +40,7 @@ public class Game {
 	/**
 	 * Initialize the game.
 	 */
-	public void Initialize(int numRows, int numCols, WordDictionary dictionary, JButton[][] crossWordFields) {
+	public void Initialize(int numRows, int numCols, WordDictionary dictionary, JButton[][] crossWordFields, JList<String> solutionList) {
 		this.numRows = numRows;
 		this.numCols = numCols;
 		this.dictionary = dictionary;
@@ -39,6 +48,12 @@ public class Game {
 		this.nodes = new HashMap<Integer, WordVariable>();
 		this.words = new ArrayList<WordVariable>();
 		this.set = new LinkedList<Tuple>();
+		this.wordsSolutions = new ArrayList<WordVariable>();
+		this.currentSolution = new Solution();
+		this.solutionList = solutionList;
+		isCancelled = false;
+		Solution.init();
+		iteration = 0;
 		findWordsAndConstraints();
 	}
 	
@@ -63,7 +78,7 @@ public class Game {
 								if (neighbour != null)
 								{
 									addNeighbours(wordVar, neighbour);
-									addConstraints(wordVar, k, neighbour, i-neighbour.getRow());
+									addConstraints(wordVar, k-j, neighbour, i-neighbour.getRow());
 								}
 							}
 							else
@@ -89,7 +104,7 @@ public class Game {
 								if (neighbour != null)
 								{
 									addNeighbours(wordVar, neighbour);
-									addConstraints(wordVar, k, neighbour, j-neighbour.getCol());
+									addConstraints(wordVar, k-i, neighbour, j-neighbour.getCol());
 								}
 							}
 							else
@@ -168,9 +183,24 @@ public class Game {
 		    }
 		}
 	}
-	public void solve() {
+	public boolean solve() {
 		// TODO Auto-generated method stub
-		ac3();
+		boolean found = ac3();
+		printSets();
+		if (!found) {
+			textArea.append("There is no solution for this puzzle!\n");
+			return false;
+		}
+		else {
+			return true;
+		}	
+	}
+	protected void displaySolution(int selectedIndex) {
+		Solution solution = Solution.solutions.get(selectedIndex);
+		for (Entry<WordVariable, String> entry : solution.solution.entrySet())
+	    {
+			printToBoard(entry.getKey(), entry.getValue());
+	    }
 	}
 	private boolean ac3() {
 		// TODO Auto-generated method stub
@@ -183,6 +213,7 @@ public class Game {
 	}
 	public boolean next() {
 		// TODO Auto-generated method stub
+		iteration++;
 		Tuple tuple = set.remove();
 		WordVariable xi = tuple.getXi();
 		WordVariable xj = tuple.getXj();
@@ -191,8 +222,11 @@ public class Game {
 				return false;
 			}
 			else {
+				if (xi.domain.size() == 1) {
+					printToBoard(xi, xi.domain.get(0));
+				}
 				for (WordVariable word : xi.neighbours) {
-				    if (xj != word) {
+				    if (xj.index != word.index) {
 				    	Tuple t = new Tuple(word, xi);
 				    	if (!set.contains(t)) {
 				    		set.add(t);
@@ -203,21 +237,35 @@ public class Game {
 		}
 		return true;
 	}
+	private void printToBoard(WordVariable xi, String word) {
+		int row = xi.getRow();
+		int col = xi.getCol();
+		if (xi.direction == Direction.ACROSS) {
+			for (int i=col; i<col+xi.length; i++) {
+				crossWordFields[i][row].setText(word.substring(i-col, i-col+1));
+			}
+		}
+		if (xi.direction == Direction.DOWN) {
+			for (int i=row; i<row+xi.length; i++) {
+				crossWordFields[col][i].setText(word.substring(i-row, i-row+1));
+			}
+		}
+	}
 	private boolean constraintPropagation(WordVariable xi, WordVariable xj) {
 		boolean change = false;
 		List<String> toRemove = new LinkedList<String>();
 		for (String u : xi.domain) {
-			boolean exists = false;
-			for (String v : xj.domain) {
-				if (satisfy(xi, xj, u, v)) {
-					exists = true;
-					break;
+				boolean exists = false;
+				for (String v : xj.domain) {
+					if (satisfy(xi, xj, u, v)) {
+						exists = true;
+						break;
+					}
 				}
-			}
-			if (!exists) {
-				change = true;
-				toRemove.add(u);
-			}
+				if (!exists) {
+					change = true;
+					toRemove.add(u);
+				}
 		}
 		for (String s : toRemove) {
 			xi.domain.remove(s);
@@ -241,6 +289,57 @@ public class Game {
 		    {
 		    	 System.out.println(u);
 		    }
+		}
+	}
+	public void printSets() {
+		for (WordVariable word : words) {
+			textArea.append("Set for word "+(word.index+1)+"(" +word.getRow()+", "+word.getCol()+") : ");
+		    for (String u: word.domain)
+		    {	
+		    	textArea.append(u + " ");
+		    }
+		    textArea.append("\n");
+		}
+	}
+	public int nextIteration() {
+		printSets();
+		boolean ok = next();
+		if (!ok) {
+			textArea.append("There is no solution for this puzzle!");
+			return 2;
+		}
+		else if (!set.isEmpty()){
+			textArea.append("End of iteration "+iteration+"\n");
+			return 1;
+		}
+		else {
+			return 0;
+		}
+	}
+	void backtrack(int index) {
+		if (isCancelled)
+			return;
+		if (wordsSolutions.size() <= index)
+		{
+			Solution.addSolution(currentSolution);
+			return;
+		}
+		WordVariable word = wordsSolutions.get(index);
+		for (String s : word.domain) {
+			boolean consistent = true;
+			for (WordVariable word2 : word.neighbours) {
+				if (currentSolution.contains(word2)) { //word2.index < word.index) {
+					if (!satisfy(word, word2, s, currentSolution.get(word2))) {
+						consistent = false;
+						break;
+					}
+				}
+			}
+			if (consistent) {
+				currentSolution.add(word, s);
+				backtrack(index+1);			
+				currentSolution.remove(word);
+			}
 		}
 	}
 }
